@@ -42,12 +42,8 @@ npm install
 
 ### Step 3: Configure
 
-The repo ships three `.example` files. Copy each one and customize:
-
 ```bash
 cp .env.example .env
-cp CLAUDE.md.example CLAUDE.md
-cp .mcp.json.example .mcp.json    # optional — only if you need MCP servers
 ```
 
 At minimum, edit `.env` and add your Discord token:
@@ -56,9 +52,30 @@ At minimum, edit `.env` and add your Discord token:
 DISCORD_TOKEN=your-discord-bot-token-here
 ```
 
-Edit `CLAUDE.md` to customize what the bot knows and how it behaves. This is the system prompt — it's the bot's brain.
+### Step 4: Set up your project directory
 
-### Step 4: Run
+The bot is designed to run from your **project directory** — the repo that has your `CLAUDE.md`, `.mcp.json`, and Claude Code skills (`.claude/commands/`). This is how the bot gets its personality, context, and capabilities.
+
+```bash
+# Set CLAUDE_CWD in .env to your project repo
+CLAUDE_CWD=/path/to/your/project-repo
+```
+
+In your project repo, make sure you have:
+- **`CLAUDE.md`** — the bot's brain. Defines what it knows, what it can do, and how it behaves.
+- **`.mcp.json`** (optional) — MCP servers for databases, APIs, and external tools.
+- **`.claude/commands/`** (optional) — Claude Code skills the bot can invoke.
+
+> **Why not run from the bot directory?** The bot code is generic — it's just the Discord ↔ Claude bridge. All the intelligence comes from your project's `CLAUDE.md`, MCP servers, and skills. Running from the project directory gives Claude full access to your codebase, context, and tools.
+
+If you don't have a separate project repo, the bot will use its own directory. Copy the example files to get started:
+
+```bash
+cp CLAUDE.md.example CLAUDE.md
+cp .mcp.json.example .mcp.json    # optional
+```
+
+### Step 5: Run
 
 ```bash
 npm start
@@ -144,7 +161,7 @@ All personalization lives in three gitignored files — the bot code itself is g
 | `DISCORD_TOKEN` | (required) | Discord bot token |
 | `ALLOWED_USERS` | (all users) | Comma-separated Discord user IDs to restrict access |
 | `MONITOR_CHANNELS` | (none) | Channels where bot responds without @mention |
-| `CLAUDE_CWD` | current directory | Working directory for Claude sessions — point at the repo with your `CLAUDE.md` and `.mcp.json` |
+| `CLAUDE_CWD` | current directory | **Your project repo** — where `CLAUDE.md`, `.mcp.json`, and `.claude/commands/` live |
 | `CLAUDE_BIN` | `claude` | Path to Claude Code binary |
 | `CLAUDE_TIMEOUT_MS` | `3600000` | Max time per Claude session (ms). Default: 1 hour |
 | `LOG_LEVEL` | `info` | Pino log level: `debug`, `info`, `warn`, `error` |
