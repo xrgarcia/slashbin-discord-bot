@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "stripe": {
+      "command": "sh",
+      "args": ["-c", "STRIPE_SECRET_KEY=sk_test_... exec npx -y @stripe/mcp"]
+    },
+    "my-database": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://user:pass@host:5432/dbname"]
+    }
+  }
+}

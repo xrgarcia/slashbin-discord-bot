@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "stripe": {
-      "command": "sh",
-      "args": ["-c", ". /home/xrgarcia/code/slashbin-product-owner/.env && STRIPE_SECRET_KEY=\"$STRIPE_CONSOLE_KEY\" exec npx -y @stripe/mcp"]
-    }
-  }
-}
