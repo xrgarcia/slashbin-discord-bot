@@ -38,13 +38,17 @@ cd slashbin-discord-bot
 npm install
 ```
 
-### 3. Configure environment
+### 3. Configure
+
+The repo ships three `.example` files. Copy each one and customize:
 
 ```bash
 cp .env.example .env
+cp CLAUDE.md.example CLAUDE.md
+cp .mcp.json.example .mcp.json    # optional
 ```
 
-Edit `.env`:
+**`.env`** — Discord token and access control:
 
 ```env
 # Required
@@ -55,39 +59,17 @@ ALLOWED_USERS=
 
 # Optional: channels where bot responds to ALL messages (no @mention needed)
 MONITOR_CHANNELS=
-
-# Optional: path to claude binary (defaults to "claude")
-CLAUDE_BIN=claude
 ```
 
-**Finding IDs:** Enable Developer Mode in Discord (Settings > Advanced > Developer Mode), then right-click users/channels to copy their IDs.
+**`CLAUDE.md`** — The bot's brain. Customize with your product context, available tools, terminology, and behavioral rules. This is the system prompt that shapes how Claude responds.
 
-### 4. Configure Claude Code context
-
-Edit `CLAUDE.md` to customize the bot's personality and knowledge. This file is the system prompt — it tells Claude what it knows, what it can do, and how to behave.
-
-### 5. Configure MCP servers (optional)
-
-Edit `.mcp.json` to add MCP servers the bot should connect to:
-
-```json
-{
-  "mcpServers": {
-    "stripe": {
-      "command": "npx",
-      "args": ["-y", "@stripe/mcp"]
-    },
-    "my-database": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://..."]
-    }
-  }
-}
-```
+**`.mcp.json`** — MCP servers the bot connects to (Stripe, Postgres, etc.). Remove this file if you don't need any.
 
 > **Note:** Claude waits for all MCP servers to connect before responding. If a server hangs (e.g., unreachable database), the bot will appear stuck. Test servers individually first.
 
-### 6. Run
+**Finding Discord IDs:** Enable Developer Mode in Discord (Settings > Advanced > Developer Mode), then right-click users/channels to copy their IDs.
+
+### 4. Run
 
 ```bash
 npm start
@@ -157,8 +139,13 @@ Key design decisions:
 
 ## Customization
 
-### Change what Claude knows
-Edit `CLAUDE.md` — this is the bot's brain. Add your product context, available tools, terminology, and behavioral rules.
+All personalization lives in three gitignored files — the bot code itself is generic:
+
+| File | Purpose |
+|---|---|
+| `CLAUDE.md` | System prompt — what the bot knows, how it behaves |
+| `.mcp.json` | MCP servers — databases, APIs, external tools |
+| `.env` | Secrets and access control |
 
 ### Add file access
 Use `--add-dir` in the spawn args (in `bot.js`) to give Claude read/write access to additional directories.
