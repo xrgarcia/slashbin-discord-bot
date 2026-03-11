@@ -68,6 +68,34 @@ In your project repo, make sure you have:
 
 > **Why not run from the bot directory?** The bot code is generic — it's just the Discord ↔ Claude bridge. All the intelligence comes from your project's `CLAUDE.md`, MCP servers, and skills. Running from the project directory gives Claude full access to your codebase, context, and tools.
 
+#### Writing your CLAUDE.md
+
+The `CLAUDE.md` is the bot's brain — it controls what Claude knows, how it behaves, and what it can do. The Discord bot needs a **lightweight** version compared to what you'd use in a terminal/IDE session. Claude loads the full `CLAUDE.md` on every message, so keep it lean.
+
+Start from the example and customize:
+
+```bash
+cp CLAUDE.md.example CLAUDE.md
+```
+
+**Key sections to include:**
+
+| Section | Purpose | Example |
+|---|---|---|
+| **Role** | Who the bot is and who it works for | "You are a product assistant for Acme Corp" |
+| **Quick lookups** | What the bot can query directly | "Query Postgres via MCP, check Stripe billing" |
+| **Context files** | Files to read on demand (not on every message) | "Read `docs/roadmap.md` only when asked about roadmap" |
+| **Actions** | What the bot is allowed to do | "Create GitHub issues, commit and push" |
+| **Terminology** | Domain-specific terms | "Golden Model = canonical output schema" |
+| **Repos** | Where to file issues and find code | "acme/backend — main API server" |
+
+**Guidelines:**
+
+- **Keep it under 100 lines.** If Claude has to read 500 lines of context on every Discord message, it wastes tokens and slows responses.
+- **Load context on demand.** Don't paste your entire architecture doc into `CLAUDE.md`. Instead, list the file paths and tell Claude to read them only when relevant.
+- **Skip startup rituals.** Tell Claude not to read files or run commands unless the question requires it.
+- **Be brief.** Remind Claude that Discord has a 2000-char limit and to keep responses concise.
+
 If you don't have a separate project repo, the bot will use its own directory. Copy the example files to get started:
 
 ```bash
