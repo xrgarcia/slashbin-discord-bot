@@ -6,3 +6,4 @@ CLAUDE.md
 *.log
 .bot.pid
 .bot-sessions.json
+.bot-history/

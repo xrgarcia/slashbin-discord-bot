@@ -7,7 +7,9 @@
     "stop": "node bot-manager.mjs stop",
     "restart": "node bot-manager.mjs restart",
     "status": "node bot-manager.mjs status",
-    "logs": "node bot-manager.mjs logs"
+    "logs": "node bot-manager.mjs logs",
+    "summarize": "node summarize.js",
+    "summarize:dry": "node summarize.js --dry-run"
   },
   "keywords": [],
   "author": "",
