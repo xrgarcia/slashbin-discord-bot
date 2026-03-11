@@ -27,6 +27,7 @@ const MONITOR_CHANNELS = process.env.MONITOR_CHANNELS
 const ALLOWED_BOTS = process.env.ALLOWED_BOTS
   ? process.env.ALLOWED_BOTS.split(",").filter(Boolean)
   : [];
+const MAX_BOT_EXCHANGES = parseInt(process.env.MAX_BOT_EXCHANGES, 10) || 2;
 
 if (!DISCORD_TOKEN) {
   log.fatal("DISCORD_TOKEN environment variable is required");
@@ -35,6 +36,12 @@ if (!DISCORD_TOKEN) {
 
 // --- Session tracking ---
 const sessions = new Map();
+
+// --- Bot-to-bot exchange tracking ---
+// Tracks consecutive bot↔bot exchanges per channel to prevent infinite loops.
+// Key: channelId, Value: { count: number, lastBotId: string }
+// Resets when a human sends a message in the channel.
+const botExchanges = new Map();
 
 // --- Discord client ---
 const client = new Client({
@@ -66,6 +73,20 @@ client.on("messageCreate", async (msg) => {
   const isMentioned = msg.mentions.has(client.user);
   const isMonitored = MONITOR_CHANNELS.includes(msg.channel.id);
   if (!isDM && !isMentioned && !isMonitored) return;
+
+  // Bot-to-bot loop prevention
+  if (msg.author.bot) {
+    const exchange = botExchanges.get(msg.channel.id) || { count: 0 };
+    exchange.count++;
+    botExchanges.set(msg.channel.id, exchange);
+    if (exchange.count > MAX_BOT_EXCHANGES) {
+      log.info({ channel: msg.channel.id, count: exchange.count, bot: msg.author.tag }, "Bot exchange limit reached, ignoring");
+      return;
+    }
+  } else {
+    // Human message resets the counter
+    botExchanges.delete(msg.channel.id);
+  }
 
   let prompt = msg.content
     .replace(new RegExp(`<@!?${client.user.id}>`, "g"), "")

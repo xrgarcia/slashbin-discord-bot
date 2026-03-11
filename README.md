@@ -191,6 +191,7 @@ All personalization lives in three gitignored files — the bot code itself is g
 | `ALLOWED_USERS` | (all users) | Comma-separated Discord user IDs to restrict access |
 | `MONITOR_CHANNELS` | (none) | Channels where bot responds without @mention |
 | `ALLOWED_BOTS` | (none) | Bot user IDs allowed to interact (enables bot-to-bot communication) |
+| `MAX_BOT_EXCHANGES` | `2` | Max back-and-forth with another bot before stopping (prevents loops) |
 | `BOT_SYSTEM_PROMPT` | (built-in) | Override the system prompt appended to every Claude session |
 | `SESSION_TIMEOUT_MS` | `1800000` | Session inactivity timeout (ms). Default: 30 minutes |
 | `CLAUDE_TIMEOUT_MS` | `3600000` | Max time per Claude session (ms). Default: 1 hour |
@@ -217,6 +218,15 @@ ALLOWED_BOTS=<bot-a-user-id>
 To find a bot's user ID: right-click the bot's name in Discord (with Developer Mode enabled) → **Copy User ID**. You can also find it on the bot's OAuth2 authorize URL — the `client_id` parameter is the same as the user ID.
 
 **Without this, @mentions between bots will be silently ignored.** This is the most common issue when setting up multi-bot workflows. If a bot responds to humans but not to another bot, `ALLOWED_BOTS` is the fix.
+
+#### Loop prevention
+
+When two bots can talk to each other, they can get into an infinite loop — each responding to the other's last message. The bot automatically stops after `MAX_BOT_EXCHANGES` consecutive bot-to-bot exchanges in the same channel (default: 2). Any human message in that channel resets the counter.
+
+```env
+# Allow up to 3 back-and-forth exchanges before stopping (default: 2)
+MAX_BOT_EXCHANGES=3
+```
 
 ### MCP servers
 
