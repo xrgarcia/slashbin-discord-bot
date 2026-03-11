@@ -179,7 +179,7 @@ journalctl -u discord-bot -f  # tail logs
 
 ### How sessions work
 
-Each Discord channel gets its own Claude Code session. Messages in the same channel continue the conversation (with full context) for 30 minutes. After 30 minutes of inactivity, the next message starts a fresh session.
+Each Discord channel gets its own Claude Code session. Messages in the same channel continue the conversation with full context — sessions persist until you type `/new` or the bot restarts. Claude Code stores sessions on disk, so even after hours of inactivity the bot picks up right where it left off.
 
 ## Configuration
 
