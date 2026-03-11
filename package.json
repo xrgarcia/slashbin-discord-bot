@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot-manager.mjs start",
+    "stop": "node bot-manager.mjs stop",
+    "restart": "node bot-manager.mjs restart",
+    "status": "node bot-manager.mjs status",
+    "logs": "node bot-manager.mjs logs"
   },
   "keywords": [],
   "author": "",
