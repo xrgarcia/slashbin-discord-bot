@@ -182,9 +182,14 @@ function runClaude(prompt, channelId, reqLog, sendMessage) {
       "--append-system-prompt", systemPrompt,
     ];
 
-    if (session && Date.now() - session.lastUsed < SESSION_TIMEOUT_MS) {
+    if (session) {
+      const idleMs = Date.now() - session.lastUsed;
       args.push("--resume", session.sessionId, "-p", prompt);
-      reqLog.info({ sessionId: session.sessionId }, "Resuming session");
+      if (idleMs > SESSION_TIMEOUT_MS) {
+        reqLog.info({ sessionId: session.sessionId, idleMin: Math.round(idleMs / 60000) }, "Resuming stale session");
+      } else {
+        reqLog.info({ sessionId: session.sessionId }, "Resuming session");
+      }
     } else {
       args.push("-p", prompt);
       reqLog.info("Starting new Claude session");
@@ -342,14 +347,10 @@ function splitMessage(text) {
   return chunks;
 }
 
-// Cleanup stale sessions every 10 minutes
+// Log session count every 10 minutes (sessions persist until /new or bot restart)
 setInterval(() => {
-  const now = Date.now();
-  for (const [key, session] of sessions) {
-    if (now - session.lastUsed > SESSION_TIMEOUT_MS) {
-      sessions.delete(key);
-      log.debug({ channel: key }, "Expired stale session");
-    }
+  if (sessions.size > 0) {
+    log.debug({ activeSessions: sessions.size }, "Session inventory");
   }
 }, 10 * 60 * 1000);
 
