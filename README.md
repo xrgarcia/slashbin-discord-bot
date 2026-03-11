@@ -200,6 +200,24 @@ All personalization lives in three gitignored files — the bot code itself is g
 
 **Finding Discord IDs:** Enable Developer Mode in Discord (Settings > Advanced > Developer Mode), then right-click users/channels to copy their IDs.
 
+### Bot-to-bot communication
+
+By default, Discord bots ignore messages from other bots. If you're running multiple bot instances (e.g., a Product Owner bot and an SRE bot) that need to talk to each other, **both bots must whitelist the other**.
+
+Each bot needs the other bot's **user ID** (not client ID) in its `ALLOWED_BOTS`:
+
+```env
+# Bot A's .env — allow Bot B to talk to it
+ALLOWED_BOTS=<bot-b-user-id>
+
+# Bot B's .env — allow Bot A to talk to it
+ALLOWED_BOTS=<bot-a-user-id>
+```
+
+To find a bot's user ID: right-click the bot's name in Discord (with Developer Mode enabled) → **Copy User ID**. You can also find it on the bot's OAuth2 authorize URL — the `client_id` parameter is the same as the user ID.
+
+**Without this, @mentions between bots will be silently ignored.** This is the most common issue when setting up multi-bot workflows. If a bot responds to humans but not to another bot, `ALLOWED_BOTS` is the fix.
+
 ### MCP servers
 
 Edit `.mcp.json` to connect databases, APIs, and other tools:
@@ -248,6 +266,10 @@ Key design decisions:
 ### Bot sends a message but it's empty or gets no response
 
 Claude is hanging. The most common cause is `stdin` — Claude's CLI expects an interactive terminal and blocks waiting for consent. The bot sets `stdio: ["ignore", "pipe", "pipe"]` to prevent this. If you've modified the spawn options, make sure stdin is set to `"ignore"`.
+
+### Bot ignores @mentions from another bot
+
+This is expected by default — bots ignore all other bots. To enable bot-to-bot communication, add the other bot's user ID to `ALLOWED_BOTS` in `.env`. **Both bots must whitelist each other.** See [Bot-to-bot communication](#bot-to-bot-communication) above.
 
 ### Bot appears stuck after receiving a message
 
