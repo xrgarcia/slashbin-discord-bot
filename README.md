@@ -180,29 +180,37 @@ journalctl -u discord-bot -f  # tail logs
 
 Each Discord channel gets its own Claude Code session. Messages in the same channel continue the conversation with full context — sessions persist until you type `/new`. Claude Code stores sessions on disk, and the bot persists the channel-to-session mapping to `.bot-sessions.json`, so conversations survive bot restarts, idle time, and even reboots.
 
-### Chat history summarization
+### Recent context loading
 
-The summarizer compresses Discord chat history into searchable daily summaries stored in `.bot-history/`:
-
-```bash
-npm run summarize          # summarize new messages since last run
-npm run summarize:dry      # preview what would be summarized (no changes)
-```
-
-**Option 1: Built-in background summarizer (recommended)**
-
-Set `SUMMARIZE_INTERVAL_MS` in `.env` to enable automatic summarization as part of the bot process — no extra scripts or cron jobs needed:
+On every Claude spawn (new session or resumed), the bot fetches the last hour of messages from all monitored channels and injects them into Claude's system prompt. This means the bot always has recent conversational context — even after a session timeout or bot restart.
 
 ```env
-# Summarize once per day (86400000ms = 24 hours)
-SUMMARIZE_INTERVAL_MS=86400000
+RECENT_CONTEXT_HOURS=1          # How far back to fetch (default: 1 hour)
+RECENT_CONTEXT_CHANNELS=...     # Channels to load (defaults to MONITOR_CHANNELS)
 ```
 
-The bot runs the first summarization cycle 10 seconds after startup, then repeats on the configured interval. It reuses the bot's existing Discord connection — no second login required.
+This works alongside session resume — the session provides Claude's internal conversation state, while recent context provides cross-channel awareness of what's been discussed.
 
-**Option 2: Standalone script**
+### Chat history summarization
 
-For manual runs or if you prefer external scheduling:
+The summarizer compresses Discord chat history into searchable daily summaries stored in `.bot-history/`.
+
+**Built-in background summarizer (recommended)**
+
+Set `SUMMARIZE_INTERVAL_MS` in `.env` to enable automatic summarization:
+
+```env
+# Summarize every hour — complements recent context loading
+SUMMARIZE_INTERVAL_MS=3600000
+```
+
+The bot runs the first cycle 10 seconds after startup, then repeats on the interval. Together with recent context loading, this creates a two-tier memory:
+- **Last hour**: raw messages injected into every Claude session
+- **Older**: summarized into `.bot-history/` files, searchable via skills
+
+**Standalone script**
+
+For manual runs or external scheduling:
 
 ```bash
 npm run summarize          # summarize new messages since last run
@@ -241,7 +249,9 @@ All personalization lives in three gitignored files — the bot code itself is g
 | `SESSION_TIMEOUT_MS` | `1800000` | Session inactivity timeout (ms). Default: 30 minutes |
 | `CLAUDE_TIMEOUT_MS` | `3600000` | Max time per Claude session (ms). Default: 1 hour |
 | `CLAUDE_BIN` | `claude` | Path to Claude Code binary |
-| `SUMMARIZE_INTERVAL_MS` | `0` (disabled) | Enable background summarization. Set to interval in ms (e.g., `86400000` = daily) |
+| `RECENT_CONTEXT_HOURS` | `1` | Hours of recent messages to inject into every Claude session |
+| `RECENT_CONTEXT_CHANNELS` | `MONITOR_CHANNELS` | Channels to load recent context from |
+| `SUMMARIZE_INTERVAL_MS` | `0` (disabled) | Enable background summarization. Set to interval in ms (e.g., `3600000` = hourly) |
 | `SUMMARIZE_CHANNELS` | `MONITOR_CHANNELS` | Channels to summarize (defaults to monitored channels) |
 | `SUMMARIZE_BATCH_SIZE` | `200` | Max messages per channel per summarization run |
 | `LOG_LEVEL` | `info` | Pino log level: `debug`, `info`, `warn`, `error` |

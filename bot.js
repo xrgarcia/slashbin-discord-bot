@@ -35,6 +35,10 @@ const SUMMARIZE_CHANNELS = process.env.SUMMARIZE_CHANNELS
   ? process.env.SUMMARIZE_CHANNELS.split(",").filter(Boolean)
   : MONITOR_CHANNELS;
 const SUMMARIZE_BATCH_SIZE = parseInt(process.env.SUMMARIZE_BATCH_SIZE, 10) || 200;
+const RECENT_CONTEXT_HOURS = parseFloat(process.env.RECENT_CONTEXT_HOURS) || 1;
+const RECENT_CONTEXT_CHANNELS = process.env.RECENT_CONTEXT_CHANNELS
+  ? process.env.RECENT_CONTEXT_CHANNELS.split(",").filter(Boolean)
+  : MONITOR_CHANNELS;
 const HISTORY_DIR = join(__dirname, ".bot-history");
 const CHECKPOINT_FILE = join(HISTORY_DIR, ".checkpoints.json");
 
@@ -200,12 +204,27 @@ function createSendQueue(msg, reqLog) {
   };
 }
 
-function runClaude(prompt, channelId, reqLog, sendMessage) {
+async function runClaude(prompt, channelId, reqLog, sendMessage) {
+  // Fetch recent history from all channels to inject as context
+  let recentContext = "";
+  try {
+    recentContext = await fetchRecentHistory();
+    if (recentContext) {
+      reqLog.info({ chars: recentContext.length }, "Loaded recent channel history");
+    }
+  } catch (err) {
+    reqLog.warn({ err: err.message }, "Failed to load recent history, proceeding without");
+  }
+
   return new Promise((resolve, reject) => {
     const session = sessions.get(channelId);
 
-    const systemPrompt = process.env.BOT_SYSTEM_PROMPT ||
+    const basePrompt = process.env.BOT_SYSTEM_PROMPT ||
       "You are running inside a Discord bot. Keep responses concise — Discord has a 2000 char limit per message. Do NOT perform startup rituals. Be brief.";
+
+    const systemPrompt = recentContext
+      ? `${basePrompt}\n\n${recentContext}`
+      : basePrompt;
 
     const args = [
       "--output-format", "stream-json",
@@ -387,6 +406,72 @@ setInterval(() => {
     log.debug({ activeSessions: sessions.size }, "Session inventory");
   }
 }, 10 * 60 * 1000);
+
+// --- Recent context loader (last N hours across all channels) ---
+// Discord snowflake: (timestamp_ms - DISCORD_EPOCH) << 22
+const DISCORD_EPOCH = 1420070400000n;
+
+function timestampToSnowflake(timestampMs) {
+  return String((BigInt(timestampMs) - DISCORD_EPOCH) << 22n);
+}
+
+async function fetchRecentHistory() {
+  if (RECENT_CONTEXT_CHANNELS.length === 0) return "";
+
+  const cutoffMs = Date.now() - RECENT_CONTEXT_HOURS * 3600000;
+  const afterSnowflake = timestampToSnowflake(cutoffMs);
+  const allMessages = [];
+
+  for (const channelId of RECENT_CONTEXT_CHANNELS) {
+    try {
+      const channel = await client.channels.fetch(channelId);
+      if (!channel || !channel.isTextBased()) continue;
+
+      const channelName = channel.name || `dm-${channelId}`;
+      let lastId = afterSnowflake;
+
+      while (true) {
+        const batch = await channel.messages.fetch({ limit: 100, after: lastId });
+        if (batch.size === 0) break;
+
+        const sorted = [...batch.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+        for (const m of sorted) {
+          allMessages.push({
+            timestamp: m.createdAt.toISOString(),
+            ts: m.createdTimestamp,
+            channel: channelName,
+            author: m.author.tag || m.author.username,
+            isBot: m.author.bot,
+            content: m.content.substring(0, 1500),
+          });
+        }
+        lastId = sorted[sorted.length - 1].id;
+
+        if (batch.size < 100) break;
+        if (allMessages.length > 500) break; // safety cap
+      }
+    } catch (err) {
+      log.warn({ channelId, err: err.message }, "Failed to fetch recent history for channel");
+    }
+  }
+
+  if (allMessages.length === 0) return "";
+
+  // Sort chronologically across all channels
+  allMessages.sort((a, b) => a.ts - b.ts);
+
+  const lines = allMessages.map((m) => {
+    const time = m.timestamp.replace("T", " ").replace(/\.\d+Z$/, "Z");
+    const botTag = m.isBot ? " (bot)" : "";
+    return `[${time}] #${m.channel} | ${m.author}${botTag}: ${m.content}`;
+  });
+
+  return [
+    `--- Recent conversation history (last ${RECENT_CONTEXT_HOURS}h, ${allMessages.length} messages) ---`,
+    ...lines,
+    "--- End recent history ---",
+  ].join("\n");
+}
 
 // --- Background summarizer (opt-in via SUMMARIZE_INTERVAL_MS) ---
 function loadCheckpoints() {
