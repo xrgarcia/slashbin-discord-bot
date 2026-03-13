@@ -314,7 +314,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
     // Build the final prompt with image paths prepended
     let finalPrompt = prompt;
     if (imagePaths.length > 0) {
-      const imageRefs = imagePaths.map(p => `[Attached image: ${p}]`).join("\n");
+      const imageRefs = imagePaths.map(p => `[Image attached by user — use the Read tool on "${p}" to view it]`).join("\n");
       finalPrompt = `${imageRefs}\n\n${prompt}`;
     }
 
