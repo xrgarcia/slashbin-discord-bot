@@ -45,7 +45,9 @@ const SUMMARY_LOOKBACK_HOURS = parseInt(process.env.SUMMARY_LOOKBACK_HOURS, 10) 
 const RECENT_CONTEXT_CHANNELS = process.env.RECENT_CONTEXT_CHANNELS
   ? process.env.RECENT_CONTEXT_CHANNELS.split(",").filter(Boolean)
   : MONITOR_CHANNELS;
-const HISTORY_DIR = join(__dirname, ".bot-history");
+const HISTORY_DIR = process.env.BOT_HISTORY_DIR
+  ? (process.env.BOT_HISTORY_DIR.startsWith("/") ? process.env.BOT_HISTORY_DIR : join(__dirname, process.env.BOT_HISTORY_DIR))
+  : join(__dirname, ".bot-history");
 const CHECKPOINT_FILE = join(HISTORY_DIR, ".checkpoints.json");
 
 if (!DISCORD_TOKEN) {

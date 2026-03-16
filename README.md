@@ -267,7 +267,8 @@ All personalization lives in three gitignored files — the bot code itself is g
 | `CLAUDE_BIN` | `claude` | Path to Claude Code binary |
 | `RECENT_CONTEXT_MAX_MESSAGES` | `30` | Max recent messages per channel (sliding window) |
 | `RECENT_CONTEXT_MAX_CHARS` | `12000` | Total context budget in characters |
-| `SUMMARY_LOOKBACK_HOURS` | `48` | How far back to load summaries from `.bot-history/` |
+| `BOT_HISTORY_DIR` | `.bot-history` | Directory for chat summaries. Absolute or relative to bot root. |
+| `SUMMARY_LOOKBACK_HOURS` | `48` | How far back to load summaries from history dir |
 | `RECENT_CONTEXT_CHANNELS` | `MONITOR_CHANNELS` | Channels to load recent context from |
 | `SUMMARIZE_INTERVAL_MS` | `0` (disabled) | Enable background summarization. Set to interval in ms (e.g., `3600000` = hourly) |
 | `SUMMARIZE_CHANNELS` | `MONITOR_CHANNELS` | Channels to summarize (defaults to monitored channels) |
