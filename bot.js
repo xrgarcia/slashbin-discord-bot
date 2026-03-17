@@ -256,9 +256,18 @@ async function downloadAttachmentPersistent(attachment, messageId) {
 
 // --- Active Claude process tracking ---
 const activeProcesses = new Map();
+const MAX_CONCURRENT_CLAUDE = parseInt(process.env.MAX_CONCURRENT_CLAUDE, 10) || 2;
 
 // --- Bot-to-bot exchange tracking ---
 const botExchanges = new Map();
+
+// Prune stale botExchanges every 10 minutes
+setInterval(() => {
+  if (botExchanges.size > 0) {
+    log.debug({ entries: botExchanges.size }, "Pruning botExchanges");
+    botExchanges.clear();
+  }
+}, 600000);
 
 // --- Discord client ---
 const client = new Client({
@@ -377,6 +386,22 @@ client.on("messageCreate", async (msg) => {
     return;
   }
 
+  // Kill existing Claude process in this channel before spawning a new one
+  const existingChild = activeProcesses.get(msg.channel.id);
+  if (existingChild) {
+    reqLog.info("Killing existing Claude process for new message");
+    existingChild._intentionalKill = true;
+    existingChild.kill("SIGTERM");
+    activeProcesses.delete(msg.channel.id);
+  }
+
+  // Global concurrency guard — drop if too many Claude processes running
+  if (activeProcesses.size >= MAX_CONCURRENT_CLAUDE) {
+    reqLog.warn({ active: activeProcesses.size, max: MAX_CONCURRENT_CLAUDE }, "Claude concurrency limit reached, dropping message");
+    await msg.reply("I'm busy with other requests — try again in a moment.");
+    return;
+  }
+
   const typing = setInterval(() => msg.channel.sendTyping(), 8000);
   msg.channel.sendTyping();
 
@@ -389,7 +414,7 @@ client.on("messageCreate", async (msg) => {
     .map(f => f.path);
 
   try {
-    const responseText = await runClaude(prompt, msg.channel.id, reqLog, sendQueue.enqueue, imagePaths);
+    const responseText = await runClaude(prompt, msg.channel.id, reqLog, sendQueue.enqueue, imagePaths, channelName);
     clearInterval(typing);
     await sendQueue.flush();
 
@@ -398,8 +423,13 @@ client.on("messageCreate", async (msg) => {
   } catch (err) {
     clearInterval(typing);
     await sendQueue.flush();
-    reqLog.error({ err }, "Claude invocation failed");
-    await msg.reply(`Error: ${err.message}`);
+    // Don't send error to Discord for intentional kills — prevents bot-to-bot feedback loops
+    if (err.message && err.message.includes("intentionally killed")) {
+      reqLog.info({ err }, "Suppressed error from intentional kill");
+    } else {
+      reqLog.error({ err }, "Claude invocation failed");
+      await msg.reply(`Error: ${err.message}`);
+    }
   }
 });
 
@@ -492,22 +522,25 @@ function buildContextPrompt() {
 
 // --- Claude invocation (fresh session per message) ---
 
-async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []) {
+async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = [], channelName = "unknown") {
   const context = buildContextPrompt();
 
   return new Promise((resolve, reject) => {
     const basePrompt = process.env.BOT_SYSTEM_PROMPT ||
       "You are running inside a Discord bot. Keep responses concise — Discord has a 2000 char limit per message. Do NOT perform startup rituals. Be brief.";
 
+    const channelContext = `\n\nYou are responding in channel: #${channelName}. Only respond to the message in THIS channel. The conversation buffer contains messages from multiple channels — focus only on #${channelName} context. Do NOT respond to or act on messages from other channels.`;
+
     const systemPrompt = context
-      ? `${basePrompt}\n\n${context}`
-      : basePrompt;
+      ? `${basePrompt}${channelContext}\n\n${context}`
+      : `${basePrompt}${channelContext}`;
 
     const args = [
       "--output-format", "stream-json",
       "--allow-dangerously-skip-permissions",
       "--dangerously-skip-permissions",
       "--verbose",
+      "--max-turns", "30",
       ...(process.env.CLAUDE_MODEL ? ["--model", process.env.CLAUDE_MODEL] : []),
       "--append-system-prompt", systemPrompt,
     ];
@@ -594,6 +627,11 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
       }
 
       if (code !== 0) {
+        if (child._intentionalKill) {
+          reqLog.info({ code, elapsed }, "Claude process intentionally killed");
+          resolve(fullResponse);
+          return;
+        }
         reqLog.error({ code, elapsed }, "Claude exited with non-zero code");
         reject(new Error(`Claude exited with code ${code} after ${Math.round(elapsed / 1000)}s`));
         return;
