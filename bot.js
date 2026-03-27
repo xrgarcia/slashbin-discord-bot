@@ -798,10 +798,16 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
       for (const match of pathMatches) {
         const cleaned = match.trim().replace(/^[`'"]+|[`'"]+$/g, "");
         if (!FILE_EXTENSIONS.test(cleaned)) continue;
-        // Resolve relative to CLAUDE_CWD
-        const resolved = cleaned.startsWith("/") ? cleaned : join(CLAUDE_CWD, cleaned);
-        if (existsSync(resolved) && !writtenFiles.includes(resolved)) {
-          writtenFiles.push(resolved);
+        // Try multiple base directories — Claude may reference paths relative to
+        // CLAUDE_CWD, its parent (repo root), or as absolute paths
+        const candidates = cleaned.startsWith("/")
+          ? [cleaned]
+          : [join(CLAUDE_CWD, cleaned), join(CLAUDE_CWD, "..", cleaned), cleaned];
+        for (const candidate of candidates) {
+          if (existsSync(candidate) && !writtenFiles.includes(candidate)) {
+            writtenFiles.push(candidate);
+            break;
+          }
         }
       }
 
