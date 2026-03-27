@@ -592,8 +592,17 @@ function createSendQueue(msg, reqLog) {
     if (sending) return;
     sending = true;
     while (pending.length > 0) {
-      const text = pending.shift();
-      const chunks = splitMessage(text);
+      const item = pending.shift();
+      // File attachment object — send directly
+      if (typeof item === "object" && item.files) {
+        try {
+          await msg.reply(item);
+        } catch (err) {
+          reqLog.error({ err }, "Failed to send Discord file attachment");
+        }
+        continue;
+      }
+      const chunks = splitMessage(item);
       for (const chunk of chunks) {
         try {
           await msg.reply(chunk);
@@ -606,9 +615,10 @@ function createSendQueue(msg, reqLog) {
   }
 
   return {
-    enqueue(text) {
-      if (!text || !text.trim()) return;
-      pending.push(text);
+    enqueue(item) {
+      if (!item) return;
+      if (typeof item === "string" && !item.trim()) return;
+      pending.push(item);
       drain();
     },
     async flush() {
@@ -727,6 +737,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
     let jsonBuffer = "";
     let turnText = "";
     let fullResponse = ""; // Accumulate full response for buffer recording
+    const writtenFiles = []; // Track files Claude creates for Discord attachment
 
     child.stdout.on("data", (data) => {
       jsonBuffer += data.toString();
@@ -742,6 +753,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
             getTurnText: () => turnText,
             setTurnText: (t) => { turnText = t; },
             appendResponse: (t) => { fullResponse += t; },
+            writtenFiles,
           });
         } catch {
           reqLog.warn({ raw: line.substring(0, 200) }, "Non-JSON line from Claude");
@@ -764,6 +776,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
             getTurnText: () => turnText,
             setTurnText: (t) => { turnText = t; },
             appendResponse: (t) => { fullResponse += t; },
+            writtenFiles,
           });
         } catch {
           // ignore
@@ -775,6 +788,15 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
         sendMessage(turnText);
         fullResponse += turnText;
         turnText = "";
+      }
+
+      // Attach any files Claude created (CSV, PDF, etc.)
+      if (writtenFiles.length > 0) {
+        const attachable = writtenFiles.filter(f => existsSync(f));
+        if (attachable.length > 0) {
+          sendMessage({ files: attachable.map(f => ({ attachment: f })) });
+          reqLog.info({ files: attachable }, "Attaching files to Discord");
+        }
       }
 
       if (code !== 0) {
@@ -816,6 +838,10 @@ function handleStreamEvent(event, reqLog, sendMessage, state) {
               sendMessage(pending);
               state.appendResponse(pending);
               state.setTurnText("");
+            }
+            // Track files Claude creates for Discord attachment
+            if (block.name === "Write" && block.input?.file_path) {
+              state.writtenFiles.push(block.input.file_path);
             }
             reqLog.info({ tool: block.name, inputPreview: JSON.stringify(block.input).substring(0, 120) }, "Tool call");
           }
