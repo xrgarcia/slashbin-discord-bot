@@ -59,7 +59,8 @@ if (!DISCORD_TOKEN) {
 // --- Duplicate instance guard ---
 // Prevent multiple bot instances from connecting to Discord simultaneously.
 // Checks .bot.pid — if another bot.js process is already running, exit.
-const PID_FILE = join(__dirname, ".bot.pid");
+const BOT_NAME = process.env.BOT_NAME || "bot";
+const PID_FILE = join(__dirname, `.${BOT_NAME}.pid`);
 (() => {
   try {
     const existingPid = parseInt(readFileSync(PID_FILE, "utf8").trim(), 10);
@@ -691,6 +692,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
       "--verbose",
       "--max-turns", "30",
       ...(process.env.CLAUDE_MODEL ? ["--model", process.env.CLAUDE_MODEL] : []),
+      ...(process.env.MCP_CONFIG ? ["--mcp-config", process.env.MCP_CONFIG] : []),
       "--append-system-prompt", systemPrompt,
     ];
 
