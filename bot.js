@@ -1215,6 +1215,106 @@ if (SUMMARIZE_INTERVAL_MS > 0) {
   log.info({ intervalMs: SUMMARIZE_INTERVAL_MS, channels: SUMMARIZE_CHANNELS }, "Background summarizer enabled");
 }
 
+// --- Scheduled jobs ---
+const SCHEDULES_FILE = join(HISTORY_DIR, "schedules.json");
+const SCHEDULE_CHECK_MS = 60_000; // check every minute
+
+function loadSchedules() {
+  try {
+    return JSON.parse(readFileSync(SCHEDULES_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function saveSchedules(schedules) {
+  writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2) + "\n");
+}
+
+function shouldRunNow(cron) {
+  // Parse "M H D MO DOW" cron format — check if current time matches
+  const [cronMin, cronHour, cronDay, cronMonth, cronDow] = cron.split(/\s+/);
+  const now = new Date();
+  const min = now.getMinutes(), hour = now.getHours();
+  const day = now.getDate(), month = now.getMonth() + 1, dow = now.getDay();
+
+  function matches(field, value) {
+    if (field === "*") return true;
+    // Handle comma-separated values
+    return field.split(",").some(v => parseInt(v, 10) === value);
+  }
+
+  return matches(cronMin, min) && matches(cronHour, hour)
+    && matches(cronDay, day) && matches(cronMonth, month)
+    && matches(cronDow, dow);
+}
+
+async function runScheduledJobs() {
+  const schedules = loadSchedules();
+  if (!schedules.length) return;
+
+  const now = new Date();
+  let changed = false;
+
+  for (const job of schedules) {
+    // Remove expired jobs
+    if (job.expires && new Date(job.expires) < now) {
+      job._remove = true;
+      changed = true;
+      log.info({ id: job.id, expires: job.expires }, "Scheduled job expired, removing");
+      continue;
+    }
+
+    if (!shouldRunNow(job.cron)) continue;
+
+    // Prevent running the same job twice in the same minute
+    const nowKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
+    if (job._lastRun === nowKey) continue;
+    job._lastRun = nowKey;
+    changed = true;
+
+    const channel = client.channels.cache.get(job.channel);
+    if (!channel) {
+      log.warn({ id: job.id, channel: job.channel }, "Scheduled job channel not found");
+      continue;
+    }
+
+    log.info({ id: job.id, prompt: job.prompt.substring(0, 80) }, "Running scheduled job");
+
+    // Create a send function that posts to the channel directly
+    const jobLog = log.child({ component: "scheduler", jobId: job.id });
+    const sendToChannel = async (content) => {
+      try {
+        if (typeof content === "object" && content.files) {
+          await channel.send(content);
+        } else {
+          for (const chunk of splitMessage(content)) {
+            await channel.send(chunk);
+          }
+        }
+      } catch (err) {
+        jobLog.error({ err: err.message }, "Failed to send scheduled message");
+      }
+    };
+
+    try {
+      const channelName = channel.name || job.channel;
+      await runClaude(job.prompt, job.channel, jobLog, sendToChannel, [], channelName);
+    } catch (err) {
+      jobLog.error({ err: err.message }, "Scheduled job failed");
+      await sendToChannel(`Scheduled job "${job.id}" failed: ${err.message}`);
+    }
+  }
+
+  if (changed) {
+    saveSchedules(schedules.filter(j => !j._remove));
+  }
+}
+
+// Start scheduler check loop
+setInterval(runScheduledJobs, SCHEDULE_CHECK_MS);
+log.info({ file: SCHEDULES_FILE }, "Job scheduler enabled");
+
 // Graceful shutdown
 process.on("SIGINT", () => {
   log.info("Shutting down...");
