@@ -793,7 +793,7 @@ async function runClaude(prompt, channelId, reqLog, sendMessage, imagePaths = []
       // Attach any files Claude created (CSV, PDF, etc.)
       // Also scan response text for file paths not caught by Write tool tracking
       // (e.g., files created via Bash/Python scripts)
-      const FILE_EXTENSIONS = /\.(csv|pdf|xlsx|json|png|jpg|html|txt|md)$/i;
+      const FILE_EXTENSIONS = /\.(csv|pdf|xlsx|png|jpg)$/i;
       const pathMatches = fullResponse.match(/(?:^|[\s`'"])(\/?(?:[\w.-]+\/)*[\w.-]+\.\w{2,4})(?:[\s`'"]|$)/gm) || [];
       for (const match of pathMatches) {
         const cleaned = match.trim().replace(/^[`'"]+|[`'"]+$/g, "");
@@ -857,8 +857,12 @@ function handleStreamEvent(event, reqLog, sendMessage, state) {
             // Flushing here causes "multiple responses" where users see a preamble
             // ("Let me check...") as a separate message before the actual answer.
             // Track files Claude creates for Discord attachment
+            // Only attach user-facing files (CSV, PDF, etc.), not config/internal files
             if (block.name === "Write" && block.input?.file_path) {
-              state.writtenFiles.push(block.input.file_path);
+              const fp = block.input.file_path;
+              if (/\.(csv|pdf|xlsx|png|jpg)$/i.test(fp)) {
+                state.writtenFiles.push(fp);
+              }
             }
             reqLog.info({ tool: block.name, inputPreview: JSON.stringify(block.input).substring(0, 120) }, "Tool call");
           }
