@@ -853,12 +853,9 @@ function handleStreamEvent(event, reqLog, sendMessage, state) {
           if (block.type === "text") {
             state.setTurnText(state.getTurnText() + block.text);
           } else if (block.type === "tool_use") {
-            const pending = state.getTurnText();
-            if (pending.trim()) {
-              sendMessage(pending);
-              state.appendResponse(pending);
-              state.setTurnText("");
-            }
+            // Don't flush text on tool calls — wait until Claude is fully done.
+            // Flushing here causes "multiple responses" where users see a preamble
+            // ("Let me check...") as a separate message before the actual answer.
             // Track files Claude creates for Discord attachment
             if (block.name === "Write" && block.input?.file_path) {
               state.writtenFiles.push(block.input.file_path);
