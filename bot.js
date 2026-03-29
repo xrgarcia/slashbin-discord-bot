@@ -43,6 +43,9 @@ const HISTORY_DIR = process.env.BOT_HISTORY_DIR
   : join(__dirname, ".bot-history");
 const CHECKPOINT_FILE = join(HISTORY_DIR, ".checkpoints.json");
 
+// --- Bot identity (must be before buffer/PID config) ---
+const BOT_NAME = process.env.BOT_NAME || "bot";
+
 // --- Conversation buffer config ---
 const BUFFER_FILE = join(__dirname, `.${BOT_NAME}-conversation-buffer.txt`);
 const BUFFER_MAX_BYTES = parseInt(process.env.BUFFER_MAX_BYTES, 10) || 32 * 1024;
@@ -59,7 +62,6 @@ if (!DISCORD_TOKEN) {
 // --- Duplicate instance guard ---
 // Prevent multiple bot instances from connecting to Discord simultaneously.
 // Checks .bot.pid — if another bot.js process is already running, exit.
-const BOT_NAME = process.env.BOT_NAME || "bot";
 const PID_FILE = join(__dirname, `.${BOT_NAME}.pid`);
 (() => {
   try {
