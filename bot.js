@@ -31,6 +31,9 @@ const MONITOR_CHANNELS = process.env.MONITOR_CHANNELS
 const ALLOWED_BOTS = process.env.ALLOWED_BOTS
   ? process.env.ALLOWED_BOTS.split(",").filter(Boolean)
   : [];
+const ALLOWED_CHANNELS = process.env.ALLOWED_CHANNELS
+  ? process.env.ALLOWED_CHANNELS.split(",").filter(Boolean)
+  : [];
 const MAX_BOT_EXCHANGES = parseInt(process.env.MAX_BOT_EXCHANGES, 10) || 2;
 const SUMMARIZE_INTERVAL_MS = parseInt(process.env.SUMMARIZE_INTERVAL_MS, 10) || 0;
 const SUMMARIZE_CHANNELS = process.env.SUMMARIZE_CHANNELS
@@ -498,6 +501,12 @@ client.on("messageCreate", async (msg) => {
   const isMentioned = msg.mentions.has(client.user);
   const isMonitored = MONITOR_CHANNELS.includes(msg.channel.id);
   if (!isDM && !isMentioned && !isMonitored) return;
+
+  // Channel allowlist — if set, only respond in these channels (even for @mentions). DMs still work.
+  if (!isDM && ALLOWED_CHANNELS.length > 0 && !ALLOWED_CHANNELS.includes(msg.channel.id)) {
+    log.debug({ channel: msg.channel.id, bot: BOT_NAME }, "Message ignored — channel not in ALLOWED_CHANNELS");
+    return;
+  }
 
   // Bot-to-bot loop prevention
   if (msg.author.bot) {
