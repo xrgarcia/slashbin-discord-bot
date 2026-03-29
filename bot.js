@@ -1237,22 +1237,38 @@ function saveSchedules(schedules) {
   writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2) + "\n");
 }
 
-function shouldRunNow(cron) {
-  // Parse "M H D MO DOW" cron format — check if current time matches
+function cronMatchesTime(cron, date) {
+  // Parse "M H D MO DOW" cron format — check if a given time matches
   const [cronMin, cronHour, cronDay, cronMonth, cronDow] = cron.split(/\s+/);
-  const now = new Date();
-  const min = now.getMinutes(), hour = now.getHours();
-  const day = now.getDate(), month = now.getMonth() + 1, dow = now.getDay();
+  const min = date.getMinutes(), hour = date.getHours();
+  const day = date.getDate(), month = date.getMonth() + 1, dow = date.getDay();
 
   function matches(field, value) {
     if (field === "*") return true;
-    // Handle comma-separated values
     return field.split(",").some(v => parseInt(v, 10) === value);
   }
 
   return matches(cronMin, min) && matches(cronHour, hour)
     && matches(cronDay, day) && matches(cronMonth, month)
     && matches(cronDow, dow);
+}
+
+function shouldRunNow(cron, lastRunKey) {
+  // Check current minute AND the last few minutes (catch missed runs)
+  const now = new Date();
+  const LOOKBACK_MINUTES = 5;
+
+  for (let i = 0; i <= LOOKBACK_MINUTES; i++) {
+    const checkTime = new Date(now.getTime() - i * 60_000);
+    const checkKey = `${checkTime.getFullYear()}-${checkTime.getMonth()}-${checkTime.getDate()}-${checkTime.getHours()}-${checkTime.getMinutes()}`;
+
+    // Skip if already ran for this minute
+    if (checkKey === lastRunKey) continue;
+
+    if (cronMatchesTime(cron, checkTime)) return true;
+  }
+
+  return false;
 }
 
 async function runScheduledJobs() {
@@ -1263,19 +1279,19 @@ async function runScheduledJobs() {
   let changed = false;
 
   for (const job of schedules) {
-    // Remove expired jobs
-    if (job.expires && new Date(job.expires) < now) {
-      job._remove = true;
-      changed = true;
-      log.info({ id: job.id, expires: job.expires }, "Scheduled job expired, removing");
+    // Check if job should run (current minute or missed in last 5 minutes)
+    if (!shouldRunNow(job.cron, job._lastRun)) {
+      // Only expire jobs that didn't need to run
+      if (job.expires && new Date(job.expires) < now) {
+        job._remove = true;
+        changed = true;
+        log.info({ id: job.id, expires: job.expires }, "Scheduled job expired, removing");
+      }
       continue;
     }
 
-    if (!shouldRunNow(job.cron)) continue;
-
-    // Prevent running the same job twice in the same minute
+    // Mark as run for this minute to prevent duplicates
     const nowKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
-    if (job._lastRun === nowKey) continue;
     job._lastRun = nowKey;
     changed = true;
 
